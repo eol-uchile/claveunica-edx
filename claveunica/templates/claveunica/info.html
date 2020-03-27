@@ -1,0 +1,103 @@
+## mako
+
+<%page expression_filter="h"/>
+<%! from django.utils.translation import ugettext as _ %>
+<%inherit file="../main.html" />
+<%block name="pagetitle">${"Gestión Alumnos"}</%block>
+<main id="main" aria-label="Content" tabindex="-1" class="static_pages">
+    <style>
+        table, th, td {
+            border: 1px solid black;
+        }
+        label{
+            font-family:"Open Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+            font-size:1rem;
+            font-style:normal;
+            line-height:1em
+            }
+    </style>
+    <h1>Gestión Alumnos</h1>
+    <div style="text-align: center">
+        <form method="GET">
+            % if context.get('success', UNDEFINED) == 'success':
+                <p id="success" style="color:rgb(56, 181, 197); margin-bottom: 15px;">Desinscrito Correctamente</p>
+            % endif                     
+            % if context.get('wrong_rut', UNDEFINED) :
+                <p id="wrong_rut" style="color:firebrick; margin-bottom: 15px;">Rut Invalido.</p>
+            % endif
+            % if context.get('error', UNDEFINED) :
+                <p id="error" style="color:firebrick; margin-bottom: 15px;">Error al Desinscribir</p>
+            % endif           
+            % if context.get('no_exists', UNDEFINED) :
+                <p id="no_exists" style="color:firebrick; margin-bottom: 15px;">Rut no ha ingresado a la plataforma o no está registrado.</p>
+            % endif
+            % if context.get('info', UNDEFINED) is False:
+                <p id="no_info" style="color:firebrick; margin-bottom: 15px;">Rut no tiene cursos.</p>
+            % endif
+            <div class="form-group" style="margin: 15px 15px;">
+                <label for="rut" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">Rut Alumno:</label>
+                % if context.get('rut', UNDEFINED) is not UNDEFINED:
+                    <input style="min-width: 400px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;margin-right: 13px;" type="text" name='rut' id="rut"  placeholder="12345678-9" value="${rut}"></input>                    
+                % else:
+                    <input style="min-width: 400px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;margin-right: 13px;" type="text" name='rut' id='rut' placeholder="12345678-9"></input>
+                % endif                
+            </div> 
+            <input type="submit" style="text-shadow: none; border-color:white; background-color: #0075b4; background-image: none; display:block; margin: auto" value="Enviar">
+        </form>
+    </div>
+</br>
+    % if context.get('info', UNDEFINED) is True or context.get('clave_user', UNDEFINED) is not UNDEFINED:
+        <section id="info_student">
+            % if context.get('clave_user', UNDEFINED) is not UNDEFINED:
+            <div id="clave_user" class="row" style="padding-left: 37%">
+                <label style="cursor: default;"><strong>Nombre:</strong> ${clave_user.first_name} ${clave_user.last_name}</label></br>
+                <label style="cursor: default;"><strong>Rut:</strong> ${rut}</label></br>
+                <label style="cursor: default;"><strong>Correo:</strong> ${clave_user.user.email} </label></br></br>
+            </div>
+            % endif  
+            % if context.get('info', UNDEFINED) is True:           
+                <div style="text-align: center">                
+                    <table style="text-align: center;margin-left:auto;margin-right:auto;border: 1;">
+                        <thead>
+                            <tr>
+                                <td>Curso</td>                            
+                                <td>Estado</td>
+                                <td>Acciones</td>                            
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-curso">                        
+                        %for curso in registrations:
+                        <form method="POST">  
+                            <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/> 
+                            <input type="hidden" name="id" value="${curso['id']},pending,${rut}"/> 
+                            <tr id="${curso['id']}">
+                                <td>${curso['course']}</td>                       
+                                <td>Pendiente</td>                       
+                                <td>
+                                    <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                                    
+                                </td>
+                            </tr>
+                        </form>
+                        %endfor
+                        % if context.get('enrolled_course', UNDEFINED) is not UNDEFINED:                    
+                            % for curso in enrolled_course:
+                            <form method="POST">  
+                                <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/> 
+                                <input type="hidden" id="id" name="id" value="${curso['id']},enroll,${rut}"/> 
+                                <tr id="${curso['id']}">
+                                    <td>${curso['course_id']}</td>                        
+                                    <td>Ingresado</td>                       
+                                    <td>
+                                        <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                                   
+                                    </td>
+                                </tr>                    
+                            </form>
+                            %endfor
+                        % endif       
+                        </tbody>
+                    </table>
+                </div>            
+            % endif           
+        </section>
+    % endif
+</main>

@@ -1,0 +1,88 @@
+## mako
+
+<%page expression_filter="h"/>
+<%! from django.utils.translation import ugettext as _ %>
+<%inherit file="../main.html" />
+<%block name="pagetitle">${_("Inscripcion Clave Unica")}</%block>
+<main id="main" aria-label="Content" tabindex="-1" class="static_pages">
+<div class="row">
+    <div class="col-md-4">       
+        <a href="export/">
+            <button style="text-shadow: none; border-color:white; background-color: #0075b4; background-image: none; display:block;" >Exportar Usuario</button>
+        </a>
+    </div>
+</div>
+<h1>Inscripción de Alumnos Clave Unica</h1>
+    <div style="text-align: center">
+        <form method="POST">
+           <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/>
+            % if context.get('saved', UNDEFINED) == 'saved':
+                <p style="color:rgb(56, 181, 197); margin-bottom: 15px;">Datos Guardados Correctamente.</p>
+            % endif
+            % if context.get('run_malos', UNDEFINED) is not UNDEFINED:
+                <p id="run_malos" style="color:firebrick; margin-bottom: 15px;">Estos Runs están incorrectos: ${run_malos}.</p>
+            % endif
+            % if context.get('no_run', UNDEFINED) is not UNDEFINED:
+                <p id="no_run" style="color:firebrick; margin-bottom: 15px;">Falta agregar run.</p>
+            % endif
+            % if context.get('error_type', UNDEFINED) is not UNDEFINED:
+                <p style="color:firebrick; margin-bottom: 15px;">El Tipo esta incorrecto.</p>
+             % endif
+            % if context.get('curso2', UNDEFINED) is not UNDEFINED:
+                <p id="curso2" style="color:firebrick; margin-bottom: 15px;">Falta agregar curso.</p>
+            % endif
+            % if context.get('error_curso', UNDEFINED) is not UNDEFINED:
+                <p style="color:firebrick; margin-bottom: 15px;">Curso no existe.</p>
+            % endif
+            % if context.get('error_mode', UNDEFINED) is not UNDEFINED:
+                <p style="color:firebrick; margin-bottom: 15px;">El modo esta incorrecto.</p>
+            % endif
+            <div class="form-group" style="margin: 15px 15px;">
+                <label for="runs" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">RUN(s):</label>
+                
+                % if context.get('runs', UNDEFINED) is not UNDEFINED:
+                    <textarea style="min-width: 400px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif" type="text" name='runs' id="runs" placeholder="12345678-k&#10;12345678-k">${runs}</textarea>                    
+                % else:
+                    <textarea style="min-width: 400px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif" type="text" name='runs' id="runs" placeholder="12345678-k&#10;12345678-k"></textarea>
+                % endif
+                
+            </div>
+            <div class="form-group" style="margin: 15px 15px;">
+                <label for="run_type" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">Tipo:</label>
+                <select style="font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;margin-right: 319px;"  name='run_type' id='run_type'>
+                    <option value="RUN">RUN</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin: 15px 15px;">
+                <label for="course" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">ID Curso:</label>
+                % if context.get('curso', UNDEFINED) is not UNDEFINED:
+                    <input style="min-width: 400px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;margin-right: 13px;" type="text" name='course' id="course"  placeholder="course-v1:mss+MSS001+2019_2" value="${curso}"></input>                    
+                % else:
+                    <input style="min-width: 400px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;margin-right: 13px;" type="text" name='course' id='course' placeholder="course-v1:mss+MSS001+2019_2"></input>
+                % endif
+                
+            </div>
+            <div class="form-group" style="margin: 15px 15px;">
+                <label for="modes" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">Modo:</label>
+                <select style="font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;margin-right: 319px;" name='modes'>
+                    % if context.get('modo', UNDEFINED) == 'audit':
+                        <option value="audit" selected>audit</option>
+                        <option value="honor">honor</option>
+                    % else:
+                        <option value="audit">audit</option>
+                        <option value="honor" selected>honor</option>
+                    % endif
+                </select>
+            </div>
+            <div class="form-group" style="margin: 15px 15px;">
+                <label for="enroll" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">Auto Enroll:</label>
+                % if context.get('auto_enroll', UNDEFINED) is False:
+                    <input type="checkbox" style="margin-right: 413px;" name='enroll' id='enroll' value="1"></input>
+                % else:
+                    <input type="checkbox" style="margin-right: 413px;" name='enroll' id='enroll' value="1" checked></input>
+                % endif
+            </div>
+            <input type="submit" style="text-shadow: none; border-color:white; background-color: #0075b4; background-image: none; display:block; margin: auto" value="Enviar">
+        </form>
+    </div>
+</main>
