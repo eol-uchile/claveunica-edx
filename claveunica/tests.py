@@ -11,11 +11,18 @@ from opaque_keys.edx.locator import CourseLocator
 from opaque_keys.edx.keys import CourseKey
 import json
 import urlparse
-
-from .views import ClaveUnicaLoginRedirect, ClaveUnicaCallback, ClaveUnicaStaff, ClaveUnicaInfo
+import six
+from .views import ClaveUnicaLoginRedirect, ClaveUnicaCallback, ClaveUnicaStaff, ClaveUnicaInfo, ClaveUnicaExportData
 from .models import ClaveUnicaUserCourseRegistration, ClaveUnicaUser
 from student.tests.factories import UserFactory, CourseEnrollmentFactory
-# Create your tests here.
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
+from completion import models
+from xmodule.modulestore import ModuleStoreEnum
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from lms.djangoapps.certificates.models import GeneratedCertificate
+
+USER_COUNT = 11
 
 
 class TestRedirectView(TestCase):
@@ -589,3 +596,151 @@ class TestInfoView(TestCase):
         response = self.client.post(reverse('claveunica-login:info'), post_data)
         self.assertEquals(response.status_code, 302)
         self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/?error=error'))
+
+
+class TestExportDataView(ModuleStoreTestCase):
+
+    def setUp(self):
+        super(TestExportDataView, self).setUp()
+        self.course = CourseFactory.create(org='mss', course='999', display_name='2020', emit_signals=True)
+
+        with self.store.bulk_operations(self.course.id, emit_signals=False):
+            chapter = ItemFactory.create(
+                parent_location=self.course.location,
+                category="chapter",
+            )
+            section = ItemFactory.create(
+                parent_location=chapter.location,
+                category="sequential",
+            )
+            subsection = ItemFactory.create(
+                parent_location=section.location,
+                category="vertical",
+            )
+            self.items = [
+                ItemFactory.create(
+                    parent_location=subsection.location,
+                    category="problem"
+                )
+                for __ in range(USER_COUNT - 1)
+            ]
+
+        # Create users, enroll
+        self.users = [UserFactory.create() for _ in range(USER_COUNT)]
+        for user in self.users:
+            ClaveUnicaUser.objects.create(
+                run_num=user.id,
+                run_dv="8",
+                run_type="RUN",
+                user=user,
+                first_name="test_name" + str(user.id),
+                last_name="test_lastname" + str(user.id))
+            CourseEnrollmentFactory(user=user, course_id=self.course.id)
+
+        with patch('student.models.cc.User.save'):
+            # Create the student
+            self.student = UserFactory(username='student', password='test', email='student@edx.org')
+            # Enroll the student in the course
+            CourseEnrollmentFactory(user=self.student, course_id=self.course.id)
+            ClaveUnicaUser.objects.create(
+                run_num=99,
+                run_dv="8",
+                run_type="RUN",
+                user=self.student,
+                first_name="test_name",
+                last_name="test_lastname")
+            # Create the user staff
+            self.staff_user = UserFactory(username='staff_user', password='test', email='staff@edx.org', is_staff=True)
+            # Log in the user staff
+            self.staff_client = Client()
+            assert_true(self.staff_client.login(username='staff_user', password='test'))
+
+    def test_infoexport_get(self):
+        aux = CourseOverview.get_from_id(self.course.id)
+
+        response = self.staff_client.get(reverse('claveunica-login:infoexport'))
+        request = response.request
+
+        self.assertEquals(response.status_code, 200)
+        self.assertEqual(request['PATH_INFO'], '/claveunica/info/export')
+        assert_true("value=\"" + str(self.course.id) + "\"" in response._container[0])
+
+    def test_infoexport_post(self):
+        post_data = {
+            'id': str(self.course.id)
+        }
+        response = self.staff_client.post(reverse('claveunica-login:infoexport'), post_data)
+
+        self.assertEquals(response._headers['content-type'], ('Content-Type', 'text/csv'))
+        data = response.content.split("\r\n")
+        self.assertEqual(data[0], "Run;Nombre;Email;Username;1.1.1;Puntos;Total;Certificado Generado")
+        self.assertEqual(data[-5], '998;test_name test_lastname;student@edx.org;student;;0/1;0/1;No')
+
+    def test_infoexport_post_with_pending_student(self):
+        post_data = {
+            'id': str(self.course.id)
+        }
+
+        pending_student = UserFactory(username='pending', password='test', email='student@edx.org')
+        ClaveUnicaUser.objects.create(
+            run_num=101,
+            run_dv="0",
+            run_type="RUN",
+            user=pending_student,
+            first_name="test_name",
+            last_name="test_lastname")
+
+        ClaveUnicaUserCourseRegistration.objects.create(
+            run_num=101,
+            run_dv="0",
+            run_type="RUN",
+            course=self.course.id,
+            mode="audit",
+            auto_enroll=True)
+
+        response = self.staff_client.post(reverse('claveunica-login:infoexport'), post_data)
+
+        self.assertEquals(response._headers['content-type'], ('Content-Type', 'text/csv'))
+        data = response.content.split("\r\n")
+        self.assertEqual(data[0], "Run;Nombre;Email;Username;1.1.1;Puntos;Total;Certificado Generado")
+        self.assertEqual(data[-2], '1010;test_name test_lastname;student@edx.org')
+
+    def test_infoexport_post_blockcompletion(self):
+        post_data = {
+            'id': str(self.course.id)
+        }
+        for item in self.items:
+            usage_key = item.scope_ids.usage_id
+            completion = models.BlockCompletion.objects.create(
+                user=self.student,
+                course_key=self.course.id,
+                block_key=usage_key,
+                completion=1.0,
+            )
+        response = self.staff_client.post(reverse('claveunica-login:infoexport'), post_data)
+
+        self.assertEquals(response._headers['content-type'], ('Content-Type', 'text/csv'))
+        data = response.content.split("\r\n")
+        self.assertEqual(data[0], "Run;Nombre;Email;Username;1.1.1;Puntos;Total;Certificado Generado")
+        self.assertEqual(data[-5], '998;test_name test_lastname;student@edx.org;student;X;1/1;1/1;No')
+
+    def test_infoexport_post_certificate(self):
+        GeneratedCertificate.objects.create(user=self.student, course_id=self.course.id)
+        post_data = {
+            'id': str(self.course.id)
+        }
+        response = self.staff_client.post(reverse('claveunica-login:infoexport'), post_data)
+
+        self.assertEquals(response._headers['content-type'], ('Content-Type', 'text/csv'))
+        data = response.content.split("\r\n")
+        self.assertEqual(data[0], "Run;Nombre;Email;Username;1.1.1;Puntos;Total;Certificado Generado")
+        self.assertEqual(data[-5], '998;test_name test_lastname;student@edx.org;student;;0/1;0/1;Si')
+
+    def test_infoexport_post_wrong_id(self):
+        post_data = {
+            'id': "wrong_id"
+        }
+        response = self.staff_client.post(reverse('claveunica-login:infoexport'), post_data)
+
+        self.assertEquals(response.status_code, 302)
+        self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/export?error=error'))

@@ -25,7 +25,7 @@
 </br>
     
     <section id="id_courses">       
-        % if context.get('cursos', UNDEFINED) is not UNDEFINED and cursos.count() > 0 :           
+        % if context.get('cursos', UNDEFINED) is not UNDEFINED and len(cursos) > 0 :           
             <div style="text-align: center">                
                 <table style="text-align: center;margin-left:auto;margin-right:auto;border: 1;">
                     <thead>
@@ -38,8 +38,8 @@
                     %for curso in cursos:
                     <form method="POST">  
                         <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/>                         
-                        <tr id="${curso['id']}">
-                            <td>${curso['id']}<input type="hidden" id="id" name="id" value="${curso['id']}" readonly/></td> 
+                        <tr id="${curso}">
+                            <td>${curso}<input type="hidden" id="id" name="id" value="${curso}" readonly/></td> 
                             <td>
                                 <input type="submit" style="text-shadow: none; border-color:white; background-color: #0075b4; background-image: none; display:block; margin: auto" value="Exportar">                                                    
                             </td>
