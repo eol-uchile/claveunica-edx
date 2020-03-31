@@ -12,12 +12,23 @@ from django.http import HttpResponse
 from models import ClaveUnicaUser, ClaveUnicaUserCourseRegistration
 from urllib import urlencode
 from itertools import cycle
-from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.keys import CourseKey, UsageKey
+from opaque_keys import InvalidKeyError
 from opaque_keys import InvalidKeyError
 from django.urls import reverse
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
+from collections import OrderedDict, defaultdict, deque
+from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
+from completion.models import BlockCompletion
+from lms.djangoapps.certificates.models import GeneratedCertificate
+from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.inheritance import compute_inherited_metadata, own_metadata
+from xblock_discussion import DiscussionXBlock
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from courseware.courses import get_course_with_access
 
+import six
 import json
 import requests
 import uuid
@@ -27,6 +38,8 @@ import sys
 import csv
 
 logger = logging.getLogger(__name__)
+FILTER_LIST = ['xml_attributes']
+INHERITED_FILTER_LIST = ['children', 'xml_attributes']
 
 
 class ClaveUnicaLoginRedirect(View):
@@ -68,6 +81,7 @@ class ClaveUnicaLoginRedirect(View):
             url = url[:-1]
         return url
 
+
 class ClaveUnicaStaff(View):
     def validarRut(self, rut):
         rut = rut.upper()
@@ -90,7 +104,6 @@ class ClaveUnicaStaff(View):
             return False
 
     def validate_course(self, id_curso):
-        from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
         try:
             aux = CourseKey.from_string(id_curso)
             return CourseOverview.objects.filter(id=aux).exists()
@@ -172,6 +185,7 @@ class ClaveUnicaStaff(View):
         context = {'runs': '', 'auto_enroll': True, 'modo': 'audit', 'saved': 'saved'}
         return render(request, 'claveunica/staff.html', context)
 
+
 class ClaveUnicaExport(View):
     """
         Export all claveunica users to csv file
@@ -195,6 +209,324 @@ class ClaveUnicaExport(View):
         writer.writerows(data)
 
         return response
+
+
+class Content(object):
+    def get_content(self, info, id_course):
+        """
+            Returns dictionary of ordered sections, subsections and units
+        """
+        max_unit = 0   # Number of units in all sections
+        content = OrderedDict()
+        children_course = info[id_course]
+        children_course = children_course['children']  # All course sections
+        children = 0  # Number of units per section
+        for id_section in children_course:  # Iterate each section
+            section = info[id_section]
+            aux_name_sec = section['metadata']
+            children = 0
+            content[id_section] = {
+                'type': 'section',
+                'name': aux_name_sec['display_name'],
+                'id': id_section,
+                'num_children': children}
+            subsections = section['children']
+            for id_subsection in subsections:  # Iterate each subsection
+                subsection = info[id_subsection]
+                units = subsection['children']
+                aux_name = subsection['metadata']
+                len_unit = len(units)
+                content[id_subsection] = {
+                    'type': 'subsection',
+                    'name': aux_name['display_name'],
+                    'id': id_subsection,
+                    'num_children': 0}
+                for id_uni in units:  # Iterate each unit and get unit name
+                    unit = info[id_uni]
+                    if len(unit['children']) > 0:
+                        max_unit += 1
+                        content[id_uni] = {
+                            'type': 'unit',
+                            'name': unit['metadata']['display_name'],
+                            'id': id_uni}
+                    else:
+                        len_unit -= 1
+                children += len_unit
+                content[id_subsection]['num_children'] = len_unit
+            content[id_section] = {
+                'type': 'section',
+                'name': aux_name_sec['display_name'],
+                'id': id_section,
+                'num_children': children}
+
+        return content, max_unit
+
+    def dump_module(
+            self,
+            module,
+            destination=None,
+            inherited=False,
+            defaults=False):
+        """
+        Add the module and all its children to the destination dictionary in
+        as a flat structure.
+        """
+
+        destination = destination if destination else {}
+
+        items = own_metadata(module)
+
+        # HACK: add discussion ids to list of items to export (AN-6696)
+        if isinstance(
+                module,
+                DiscussionXBlock) and 'discussion_id' not in items:
+            items['discussion_id'] = module.discussion_id
+
+        filtered_metadata = {
+            k: v for k,
+            v in six.iteritems(items) if k not in FILTER_LIST}
+
+        destination[six.text_type(module.location)] = {
+            'category': module.location.block_type,
+            'children': [six.text_type(child) for child in getattr(module, 'children', [])],
+            'metadata': filtered_metadata,
+        }
+
+        if inherited:
+            # When calculating inherited metadata, don't include existing
+            # locally-defined metadata
+            inherited_metadata_filter_list = list(filtered_metadata.keys())
+            inherited_metadata_filter_list.extend(INHERITED_FILTER_LIST)
+
+            def is_inherited(field):
+                if field.name in inherited_metadata_filter_list:
+                    return False
+                elif field.scope != Scope.settings:
+                    return False
+                elif defaults:
+                    return True
+                else:
+                    return field.values != field.default
+
+            inherited_metadata = {field.name: field.read_json(
+                module) for field in module.fields.values() if is_inherited(field)}
+            destination[six.text_type(
+                module.location)]['inherited_metadata'] = inherited_metadata
+
+        for child in module.get_children():
+            self.dump_module(child, destination, inherited, defaults)
+
+        return destination
+
+
+class ClaveUnicaExportData(View, Content):
+    """
+        Export student data from a course
+    """
+
+    def get(self, request):
+        error = request.GET.get("error", None)
+
+        context = {'cursos': self.get_all_courses(), 'error': error}
+        return render(request, 'claveunica/infoexport.html', context)
+
+    def post(self, request):
+        data = []
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="course.csv"'
+        writer = csv.writer(response, delimiter=';', dialect='excel')
+
+        course_id = request.POST.get('id')
+        if self.validate_course(course_id):
+            course_key = CourseKey.from_string(course_id)
+            course = get_course_with_access(request.user, "load", course_key)
+            store = modulestore()
+            info = self.dump_module(store.get_course(course_key))
+            id_course = str(BlockUsageLocator(course_key, "course", "course"))
+            if 'i4x://' in id_course:
+                id_course = str(BlockUsageLocator(course_key, "course", course.display_name))
+
+            enrolled_students = ClaveUnicaUser.objects.filter(
+                user__courseenrollment__course_id=course_key,
+                user__courseenrollment__is_active=1
+            ).values('user__id', 'user__username', 'user__email', 'run_num', 'run_dv', 'first_name', 'last_name')
+
+            not_enrolled_students = ClaveUnicaUserCourseRegistration.objects.filter(course=course_key).values('run_num', 'run_dv', 'run_type')
+            content, max_unit = self.get_content(info, id_course)
+
+            user_tick = self.get_ticks(
+                content, info, enrolled_students, course_key, max_unit, not_enrolled_students)
+
+            writer.writerows(user_tick['data'])
+
+            return response
+
+        url = '{}?{}'.format(reverse('claveunica-login:infoexport'), urlencode({'error': 'error'}))
+        return redirect(url)
+
+    def get_ticks(
+            self,
+            content,
+            info,
+            enrolled_students,
+            course_key,
+            max_unit,
+            not_enrolled_students):
+        """
+            Dictionary of students with data if students completed the units
+        """
+        user_tick = defaultdict(list)
+
+        students_id = [x['user__id'] for x in enrolled_students]
+        students_name = [x['first_name'] + " " + x['last_name'] for x in enrolled_students]
+        students_run = [str(x['run_num']) + x['run_dv'] for x in enrolled_students]
+        students_username = [x['user__username'] for x in enrolled_students]
+        students_email = [x['user__email'] for x in enrolled_students]
+        i = 0
+        certificate = self.get_certificate(students_id, course_key)
+        blocks = self.get_block(students_id, course_key)
+        user_tick['data'].append(self.get_headers(content))
+        for user in students_id:
+            i += 1
+            # Get a list of true/false if they completed the units
+            # and number of completed units
+            data = self.get_data_tick(content, info, user, blocks, max_unit)
+            aux_user_tick = deque(data)
+            aux_user_tick.appendleft(students_username[i - 1])
+            aux_user_tick.appendleft(students_email[i - 1])
+            aux_user_tick.appendleft(students_name[i - 1])
+            aux_user_tick.appendleft(students_run[i - 1])
+            aux_user_tick.append('Si' if user in certificate else 'No')
+            user_tick['data'].append(list(aux_user_tick))
+
+        user_tick['data'].append(['#', '#', '#', '#', '#', '#', '#', '#'])
+        user_tick['data'].append(['#', '#', '#', '#', '#', '#', '#', '#'])
+        user_tick['data'].append(['Alumnos pendientes'])
+        for user in not_enrolled_students:
+            claveunica_user = ClaveUnicaUser.objects.filter(run_num=user['run_num'], run_dv=user['run_dv'], run_type=user['run_type']).values('first_name', 'last_name', 'user__email')
+            if claveunica_user:
+                user_tick['data'].append([str(user['run_num']) + user['run_dv'], claveunica_user[0]['first_name'] + " " + claveunica_user[0]['last_name'], claveunica_user[0]['user__email']])
+            else:
+                user_tick['data'].append([user['run_num'], user['run_dv'], 'Sin registro'])
+        return user_tick
+
+    def get_block(self, students_id, course_key):
+        """
+            Get all completed students block
+        """
+        aux_blocks = BlockCompletion.objects.filter(
+            user_id__in=students_id,
+            course_key=course_key,
+            completion=1.0).values(
+            'user_id',
+            'block_key')
+        blocks = defaultdict(list)
+        for b in aux_blocks:
+            blocks[b['user_id']].append(b['block_key'])
+
+        return blocks
+
+    def get_data_tick(self, content, info, user, blocks, max_unit):
+        """
+            Get a list of true/false if they completed the units
+            and number of completed units
+        """
+        data = []
+        completed_unit = 0  # Number of completed units per student
+        completed_unit_per_section = 0  # Number of completed units per section
+        num_units_section = 0  # Number of units per section
+        first = True
+        for unit in content.items():
+            if unit[1]['type'] == 'unit':
+                unit_info = info[unit[1]['id']]
+                blocks_unit = unit_info['children']
+                if len(blocks_unit) > 0:
+                    blocks_unit = [UsageKey.from_string(
+                        x) for x in blocks_unit if 'discussion+block' not in x]
+                    checker = self.get_block_tick(blocks_unit, blocks, user)
+                    completed_unit_per_section += 1
+                    num_units_section += 1
+                    completed_unit += 1
+
+                if not checker:
+                    completed_unit -= 1
+                    completed_unit_per_section -= 1
+                    data.append('')
+                else:
+                    data.append('X')
+            if not first and unit[1]['type'] == 'section' and unit[1]['num_children'] > 0:
+                aux_point = str(completed_unit_per_section) + \
+                    "/" + str(num_units_section)
+                data.append(aux_point)
+                completed_unit_per_section = 0
+                num_units_section = 0
+            if first and unit[1]['type'] == 'section' and unit[1]['num_children'] > 0:
+                first = False
+        aux_point = str(completed_unit_per_section) + \
+            "/" + str(num_units_section)
+        data.append(aux_point)
+        aux_final_point = str(completed_unit) + "/" + str(max_unit)
+        data.append(aux_final_point)
+        return data
+
+    def get_block_tick(self, blocks_unit, blocks, user):
+        """
+            Check if unit block is completed
+        """
+        if all(elem in blocks[user] for elem in blocks_unit):
+            return True
+        return False
+
+    def get_certificate(self, students_id, course_id):
+        """
+            Check if users has generated a certificate
+        """
+        certificates = GeneratedCertificate.objects.filter(
+            user_id__in=students_id, course_id=course_id).values("user_id")
+        cer_students_id = [x["user_id"] for x in certificates]
+
+        return cer_students_id
+
+    def get_headers(self, content):
+        """
+            Get a table headers
+        """
+        data = ["Run", "Nombre", "Email", "Username"]
+        i = 1
+        j = 1
+        k = 1
+        first = True
+        first2 = True
+        for section in content.items():
+            if not first and section[1]['type'] == 'section' and section[1]['num_children'] > 0:
+                i += 1
+                j = 0
+                data.append("Puntos")
+            if not first2 and section[1]['type'] == 'subsection' and section[1]['num_children'] > 0:
+                j += 1
+                k = 1
+            if section[1]['type'] == 'unit':
+                first2 = False
+                data.append(str(i) + "." + str(j) + "." + str(k))
+                k += 1
+            if first and section[1]['type'] == 'section' and section[1]['num_children'] > 0:
+                first = False
+        data.append("Puntos")
+        data.append("Total")
+        data.append("Certificado Generado")
+        return data
+
+    def validate_course(self, id_curso):
+        try:
+            aux = CourseKey.from_string(id_curso)
+            return CourseOverview.objects.filter(id=aux).exists()
+        except InvalidKeyError:
+            return False
+
+    def get_all_courses(self):
+        aux = CourseOverview.objects.all().values('id')
+        return [x['id'] for x in aux]
+
 
 class ClaveUnicaInfo(View):
     def validarRut(self, rut):
@@ -315,6 +647,7 @@ class ClaveUnicaInfo(View):
         ).values('id', 'course_id')
 
         return enrolled_course
+
 
 class ClaveUnicaCallback(View):
     RESULT_CALLBACK_URL = 'https://accounts.claveunica.gob.cl/openid/token'

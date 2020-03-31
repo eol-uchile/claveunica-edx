@@ -10,4 +10,5 @@ urlpatterns = [
     url('staff/$', staff_member_required(ClaveUnicaStaff.as_view()), name='staff'),
     url('staff/export/$', staff_member_required(ClaveUnicaExport.as_view()), name='export'),
     url('info/$', staff_member_required(ClaveUnicaInfo.as_view()), name='info'),
+    url('info/export$', staff_member_required(ClaveUnicaExportData.as_view()), name='infoexport'),
 ]
