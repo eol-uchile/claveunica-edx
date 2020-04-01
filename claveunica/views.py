@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -- coding: utf-8 --
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.contrib.auth import login
@@ -35,7 +38,7 @@ import uuid
 import unidecode
 import logging
 import sys
-import csv
+import unicodecsv as csv
 
 logger = logging.getLogger(__name__)
 FILTER_LIST = ['xml_attributes']
@@ -334,7 +337,7 @@ class ClaveUnicaExportData(View, Content):
         data = []
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="course.csv"'
-        writer = csv.writer(response, delimiter=';', dialect='excel')
+        writer = csv.writer(response, delimiter=';', dialect='excel', encoding='utf-8')
 
         course_id = request.POST.get('id')
         if self.validate_course(course_id):
@@ -514,6 +517,7 @@ class ClaveUnicaExportData(View, Content):
         data.append("Puntos")
         data.append("Total")
         data.append("Certificado Generado")
+        
         return data
 
     def validate_course(self, id_curso):
