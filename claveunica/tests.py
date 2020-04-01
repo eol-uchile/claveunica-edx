@@ -341,14 +341,15 @@ class TestStaffView(TestCase):
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 0)
 
 
-class TestInfoView(TestCase):
+class TestInfoView(ModuleStoreTestCase):
 
     def setUp(self):
-        self.client = Client()
-        self.user = User.objects.create_user(username='testuser', password='12345')
-        self.user.is_staff = True
-        self.user.save()
-        self.client.login(username='testuser', password='12345')
+        super(TestInfoView, self).setUp()
+
+        with patch('student.models.cc.User.save'):
+            self.client = Client()
+            self.user = UserFactory(username='testuser2', password='12345', email='student2@edx.org', is_staff=True)
+            self.client.login(username='testuser2', password='12345')
 
         result = self.client.get(reverse('claveunica-login:info'))
 
@@ -399,32 +400,36 @@ class TestInfoView(TestCase):
         assert_true("id=\"error\"" in response._container[0])
 
     def test_info_get_pending_course_exists(self):
+        course_1 = CourseFactory.create(org='mss', course='999', display_name='2020', emit_signals=True)
+        course_2 = CourseFactory.create(org='mss', course='888', display_name='2021', emit_signals=True)
+        aux = CourseOverview.get_from_id(course_1.id)
+        aux2 = CourseOverview.get_from_id(course_2.id)
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course="course-v1:test+TEST+2019-2",
+            course=course_1.id,
             mode="audit",
             auto_enroll=True)
         id_1 = ClaveUnicaUserCourseRegistration.objects.get(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course=CourseKey.from_string("course-v1:test+TEST+2019-2"),
+            course=course_1.id,
             mode="audit",
             auto_enroll=True)
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course="course-v1:test+TEST+2019-4",
+            course=course_2.id,
             mode="audit",
             auto_enroll=True)
         id_2 = ClaveUnicaUserCourseRegistration.objects.get(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course=CourseKey.from_string("course-v1:test+TEST+2019-4"),
+            course=course_2.id,
             mode="audit",
             auto_enroll=True)
 

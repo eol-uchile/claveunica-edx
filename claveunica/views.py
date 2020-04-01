@@ -352,7 +352,7 @@ class ClaveUnicaExportData(View, Content):
             enrolled_students = ClaveUnicaUser.objects.filter(
                 user__courseenrollment__course_id=course_key,
                 user__courseenrollment__is_active=1
-            ).values('user__id', 'user__username', 'user__email', 'run_num', 'run_dv', 'first_name', 'last_name')
+            ).order_by('user__username').values('user__id', 'user__username', 'user__email', 'run_num', 'run_dv', 'first_name', 'last_name')
 
             not_enrolled_students = ClaveUnicaUserCourseRegistration.objects.filter(course=course_key).values('run_num', 'run_dv', 'run_type')
             content, max_unit = self.get_content(info, id_course)
@@ -517,7 +517,7 @@ class ClaveUnicaExportData(View, Content):
         data.append("Puntos")
         data.append("Total")
         data.append("Certificado Generado")
-        
+
         return data
 
     def validate_course(self, id_curso):
@@ -528,8 +528,8 @@ class ClaveUnicaExportData(View, Content):
             return False
 
     def get_all_courses(self):
-        aux = CourseOverview.objects.all().values('id')
-        return [x['id'] for x in aux]
+        aux = CourseOverview.objects.all().order_by('display_name').values('id', 'display_name')
+        return [[x['id'], x['display_name']] for x in aux]
 
 
 class ClaveUnicaInfo(View):
@@ -591,7 +591,12 @@ class ClaveUnicaInfo(View):
                 context['no_exists'] = True
 
             registrations = ClaveUnicaUserCourseRegistration.objects.filter(run_num=run_num, run_dv=run_dv, run_type=run_type).values('id', 'course')
-            context['registrations'] = registrations
+            data = []
+            for r in registrations:
+                course_pending = CourseOverview.objects.filter(id=r['course']).values('display_name', 'start')
+                data.append([r['id'], r['course'], course_pending[0]['display_name'], course_pending[0]['start']])
+
+            context['registrations'] = data
 
             if registrations.count() > 0 or aux > 0:
                 context['info'] = True
@@ -648,7 +653,7 @@ class ClaveUnicaInfo(View):
         enrolled_course = CourseEnrollment.objects.filter(
             user=clave_user.user,
             is_active=1
-        ).values('id', 'course_id')
+        ).order_by('course__start').values('id', 'course_id', 'course__start', 'course__display_name')
 
         return enrolled_course
 

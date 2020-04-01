@@ -60,7 +60,9 @@
                     <table style="text-align: center;margin-left:auto;margin-right:auto;border: 1;">
                         <thead>
                             <tr>
-                                <td>Curso</td>                            
+                                <td>Id</td>
+                                <td>Curso</td>
+                                <td>Inicio</td>                            
                                 <td>Estado</td>
                                 <td>Acciones</td>                            
                             </tr>
@@ -69,9 +71,11 @@
                         %for curso in registrations:
                         <form method="POST">  
                             <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/> 
-                            <input type="hidden" name="id" value="${curso['id']},pending,${rut}"/> 
-                            <tr id="${curso['id']}">
-                                <td>${curso['course']}</td>                       
+                            <input type="hidden" name="id" value="${curso[0]},pending,${rut}"/> 
+                            <tr id="${curso[0]}">
+                                <td>${curso[1]}</td>
+                                <td>${curso[2]}</td>
+                                <td>${curso[3]}</td>                       
                                 <td>Pendiente</td>                       
                                 <td>
                                     <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                                    
@@ -84,8 +88,10 @@
                             <form method="POST">  
                                 <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/> 
                                 <input type="hidden" id="id" name="id" value="${curso['id']},enroll,${rut}"/> 
-                                <tr id="${curso['id']}">
-                                    <td>${curso['course_id']}</td>                        
+                                <tr id="${curso['id']}">                                    
+                                    <td>${curso['course_id']}</td>  
+                                    <td>${curso['course__display_name']}</td>  
+                                    <td>${curso['course__start']}</td>                      
                                     <td>Ingresado</td>                       
                                     <td>
                                         <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                                   

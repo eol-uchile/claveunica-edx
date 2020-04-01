@@ -31,6 +31,7 @@
                     <thead>
                         <tr>
                             <td>Curso</td>
+                            <td>Nombre</td>
                             <td>Acciones</td>                            
                         </tr>
                     </thead>
@@ -38,8 +39,9 @@
                     %for curso in cursos:
                     <form method="POST">  
                         <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/>                         
-                        <tr id="${curso}">
-                            <td>${curso}<input type="hidden" id="id" name="id" value="${curso}" readonly/></td> 
+                        <tr id="${curso[0]}">
+                            <td>${curso[0]}<input type="hidden" id="id" name="id" value="${curso[0]}" readonly/></td>
+                            <td>${curso[1]}</td> 
                             <td>
                                 <input type="submit" style="text-shadow: none; border-color:white; background-color: #0075b4; background-image: none; display:block; margin: auto" value="Exportar">                                                    
                             </td>
