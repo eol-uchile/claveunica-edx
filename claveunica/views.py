@@ -233,7 +233,7 @@ class ClaveUnicaExport(View):
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="users.csv"'
 
-        writer = csv.writer(response, delimiter=';', dialect='excel')
+        writer = csv.writer(response, delimiter=';', dialect='excel', encoding='utf-8')
         data.append([])
         data[0].extend(['Run', 'Username', 'Email'])
         i = 1
