@@ -174,19 +174,51 @@ class ClaveUnicaStaff(View):
         if len(context) > 4:
             return render(request, 'claveunica/staff.html', context)
 
+        run_saved_pending = ""
+        run_saved_enroll = ""
+        run_saved_enroll_no_auto = ""
         # guarda el form
-        for run in lista_run:
-            registro = ClaveUnicaUserCourseRegistration()
-            registro.run_num = int(run[:-1])
-            registro.run_dv = run[-1:]
-            registro.run_type = request.POST.get("run_type", None)
-            registro.course = request.POST.get("course", "")
-            registro.mode = request.POST.get("modes", None)
-            registro.auto_enroll = enroll
-            registro.save()
+        with transaction.atomic():
+            for run in lista_run:
+                while len(run) < 10 and 'P' != run[0]:
+                    run = "0" + run
+                try:
+                    claveunica_user = ClaveUnicaUser.objects.get(run_num=int(run[:-1]), run_dv=run[-1:], run_type=request.POST.get("run_type", None))
+                    self.enroll_course(claveunica_user, request.POST.get("course", ""), enroll, request.POST.get("modes", None))
+                    if enroll:
+                        run_saved_enroll += run + " - "
+                    else:
+                        run_saved_enroll_no_auto += run + " - "
+                except ClaveUnicaUser.DoesNotExist:
+                    registro = ClaveUnicaUserCourseRegistration()
+                    registro.run_num = int(run[:-1])
+                    registro.run_dv = run[-1:]
+                    registro.run_type = request.POST.get("run_type", None)
+                    registro.course = request.POST.get("course", "")
+                    registro.mode = request.POST.get("modes", None)
+                    registro.auto_enroll = enroll
+                    registro.save()
+                    run_saved_pending += run + " - "
 
-        context = {'runs': '', 'auto_enroll': True, 'modo': 'audit', 'saved': 'saved'}
+        run_saved = {
+            'run_saved_pending': run_saved_pending[:-3],
+            'run_saved_enroll': run_saved_enroll[:-3],
+            'run_saved_enroll_no_auto': run_saved_enroll_no_auto[:-3]
+        }
+        context = {'runs': '', 'auto_enroll': True, 'modo': 'audit', 'saved': 'saved', 'run_saved': run_saved}
         return render(request, 'claveunica/staff.html', context)
+
+    def enroll_course(self, claveunica_user, course, enroll, mode):
+        """
+        Enroll the user in the pending courses, removing the enrollments when
+        they are applied.
+        """
+        from student.models import CourseEnrollment, CourseEnrollmentAllowed
+
+        if enroll:
+            CourseEnrollment.enroll(claveunica_user.user, CourseKey.from_string(course), mode=mode)
+        else:
+            CourseEnrollmentAllowed.objects.create(course_id=CourseKey.from_string(course), email=claveunica_user.user.email, user=claveunica_user.user)
 
 
 class ClaveUnicaExport(View):
