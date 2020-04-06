@@ -238,7 +238,14 @@ class TestStaffView(ModuleStoreTestCase):
             user = UserFactory(username='testuser3', password='12345', email='student2@edx.org', is_staff=True)
             self.client.login(username='testuser3', password='12345')
 
-        ClaveUnicaUser.objects.create(user=user, run='009472337K')
+        ClaveUnicaUser.objects.create(
+            run_num=9472337,
+            run_dv="K",
+            run_type="RUN",
+            user=user,
+            first_name="test_name",
+            last_name="test_lastname")
+
         result = self.client.get(reverse('claveunica-login:staff'))
 
     def test_staff_get(self):
@@ -337,6 +344,7 @@ class TestStaffView(ModuleStoreTestCase):
     def test_staff_post_exits_user_enroll(self):
         post_data = {
             'runs': '9472337-k',
+            'run_type': 'RUN',
             'course': self.course.id,
             'modes': 'audit',
             'enroll': '1'
@@ -345,13 +353,14 @@ class TestStaffView(ModuleStoreTestCase):
         response = self.client.post(reverse('claveunica-login:staff'), post_data)
         request = response.request
         self.assertEquals(response.status_code, 200)
-        self.assertEqual(EdxLoginUserCourseRegistration.objects.count(), 0)
-        self.assertEqual(request['PATH_INFO'], '/claveunica/staff/')
+        self.assertEqual(ClaveUnicaUserCourseRegistration.objects.count(), 0)
+        self.assertEqual(request['PATH_INFO'], '/claveunica/staff/')        
         assert_true("id=\"run_saved_enroll\"" in response._container[0])
 
     def test_staff_post_exits_user_no_enroll(self):
         post_data = {
             'runs': '9472337-k',
+            'run_type': 'RUN',
             'course': self.course.id,
             'modes': 'audit'
         }
@@ -359,7 +368,7 @@ class TestStaffView(ModuleStoreTestCase):
         response = self.client.post(reverse('claveunica-login:staff'), post_data)
         request = response.request
         self.assertEquals(response.status_code, 200)
-        self.assertEqual(EdxLoginUserCourseRegistration.objects.count(), 0)
+        self.assertEqual(ClaveUnicaUserCourseRegistration.objects.count(), 0)
         self.assertEqual(request['PATH_INFO'], '/claveunica/staff/')
         assert_true("id=\"run_saved_enroll_no_auto\"" in response._container[0])
 
