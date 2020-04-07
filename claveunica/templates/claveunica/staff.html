@@ -5,6 +5,24 @@
 <%inherit file="../main.html" />
 <%block name="pagetitle">${_("Inscripcion Clave Unica")}</%block>
 <main id="main" aria-label="Content" tabindex="-1" class="static_pages">
+<style>
+    @media (min-width: 10px){
+        .inputwidth1{
+            margin-right: 0px;
+        }
+        .inputwidth2{
+            margin-right: 0px;
+        }        
+    }
+    @media (min-width: 750px){
+        .inputwidth1{
+            margin-right: 319px;
+        }
+        .inputwidth2{
+            margin-right: 413px;
+        }        
+    }
+</style>
 <div class="row">
     <div class="col-md-4">       
         <a href="export/">
@@ -16,8 +34,19 @@
     <div style="text-align: center">
         <form method="POST">
            <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/>
-            % if context.get('saved', UNDEFINED) == 'saved':
+           % if context.get('saved', UNDEFINED) == 'saved':
                 <p style="color:rgb(56, 181, 197); margin-bottom: 15px;">Datos Guardados Correctamente.</p>
+                % if context.get('run_saved', UNDEFINED) is not UNDEFINED:                    
+                    % if run_saved['run_saved_pending'] != "":
+                        <p id="run_saved_pending" style="color:rgb(56, 181, 197); margin-bottom: 15px;">Runs no registrados (Pendientes): ${run_saved['run_saved_pending']}</p>
+                    % endif
+                    % if run_saved['run_saved_enroll'] != "":
+                        <p id="run_saved_enroll" style="color:rgb(56, 181, 197); margin-bottom: 15px;">Runs Inscritos con Auto Enroll: ${run_saved['run_saved_enroll']}</p>
+                    % endif
+                    % if run_saved['run_saved_enroll_no_auto'] != "":
+                        <p id="run_saved_enroll_no_auto" style="color:rgb(56, 181, 197); margin-bottom: 15px;">Runs Inscritos sin Auto Enroll: ${run_saved['run_saved_enroll_no_auto']}</p>
+                    % endif
+                % endif
             % endif
             % if context.get('run_malos', UNDEFINED) is not UNDEFINED:
                 <p id="run_malos" style="color:firebrick; margin-bottom: 15px;">Estos Runs están incorrectos: ${run_malos}.</p>
@@ -64,7 +93,7 @@
             </div>
             <div class="form-group" style="margin: 15px 15px;">
                 <label for="modes" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">Modo:</label>
-                <select style="font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;margin-right: 319px;" name='modes'>
+                <select class="inputwidth1" style="font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;" name='modes'>
                     % if context.get('modo', UNDEFINED) == 'audit':
                         <option value="audit" selected>audit</option>
                         <option value="honor">honor</option>
@@ -77,9 +106,9 @@
             <div class="form-group" style="margin: 15px 15px;">
                 <label for="enroll" style="line-height: 33px; text-align: right; clear: both; margin-right: 15px; font-style: normal; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif">Auto Enroll:</label>
                 % if context.get('auto_enroll', UNDEFINED) is False:
-                    <input type="checkbox" style="margin-right: 413px;" name='enroll' id='enroll' value="1"></input>
+                    <input class="inputwidth2" type="checkbox" name='enroll' id='enroll' value="1"></input>
                 % else:
-                    <input type="checkbox" style="margin-right: 413px;" name='enroll' id='enroll' value="1" checked></input>
+                    <input class="inputwidth2" type="checkbox" name='enroll' id='enroll' value="1" checked></input>
                 % endif
             </div>
             <input type="submit" style="text-shadow: none; border-color:white; background-color: #0075b4; background-image: none; display:block; margin: auto" value="Enviar">

@@ -174,19 +174,51 @@ class ClaveUnicaStaff(View):
         if len(context) > 4:
             return render(request, 'claveunica/staff.html', context)
 
+        run_saved_pending = ""
+        run_saved_enroll = ""
+        run_saved_enroll_no_auto = ""
         # guarda el form
-        for run in lista_run:
-            registro = ClaveUnicaUserCourseRegistration()
-            registro.run_num = int(run[:-1])
-            registro.run_dv = run[-1:]
-            registro.run_type = request.POST.get("run_type", None)
-            registro.course = request.POST.get("course", "")
-            registro.mode = request.POST.get("modes", None)
-            registro.auto_enroll = enroll
-            registro.save()
+        with transaction.atomic():
+            for run in lista_run:
+                while len(run) < 10 and 'P' != run[0]:
+                    run = "0" + run
+                try:
+                    claveunica_user = ClaveUnicaUser.objects.get(run_num=int(run[:-1]), run_dv=run[-1:], run_type=request.POST.get("run_type", None))
+                    self.enroll_course(claveunica_user, request.POST.get("course", ""), enroll, request.POST.get("modes", None))
+                    if enroll:
+                        run_saved_enroll += run + " - "
+                    else:
+                        run_saved_enroll_no_auto += run + " - "
+                except ClaveUnicaUser.DoesNotExist:
+                    registro = ClaveUnicaUserCourseRegistration()
+                    registro.run_num = int(run[:-1])
+                    registro.run_dv = run[-1:]
+                    registro.run_type = request.POST.get("run_type", None)
+                    registro.course = request.POST.get("course", "")
+                    registro.mode = request.POST.get("modes", None)
+                    registro.auto_enroll = enroll
+                    registro.save()
+                    run_saved_pending += run + " - "
 
-        context = {'runs': '', 'auto_enroll': True, 'modo': 'audit', 'saved': 'saved'}
+        run_saved = {
+            'run_saved_pending': run_saved_pending[:-3],
+            'run_saved_enroll': run_saved_enroll[:-3],
+            'run_saved_enroll_no_auto': run_saved_enroll_no_auto[:-3]
+        }
+        context = {'runs': '', 'auto_enroll': True, 'modo': 'audit', 'saved': 'saved', 'run_saved': run_saved}
         return render(request, 'claveunica/staff.html', context)
+
+    def enroll_course(self, claveunica_user, course, enroll, mode):
+        """
+        Enroll the user in the pending courses, removing the enrollments when
+        they are applied.
+        """
+        from student.models import CourseEnrollment, CourseEnrollmentAllowed
+
+        if enroll:
+            CourseEnrollment.enroll(claveunica_user.user, CourseKey.from_string(course), mode=mode)
+        else:
+            CourseEnrollmentAllowed.objects.create(course_id=CourseKey.from_string(course), email=claveunica_user.user.email, user=claveunica_user.user)
 
 
 class ClaveUnicaExport(View):
@@ -201,7 +233,7 @@ class ClaveUnicaExport(View):
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="users.csv"'
 
-        writer = csv.writer(response, delimiter=';', dialect='excel')
+        writer = csv.writer(response, delimiter=';', dialect='excel', encoding='utf-8')
         data.append([])
         data[0].extend(['Run', 'Username', 'Email'])
         i = 1
@@ -352,7 +384,7 @@ class ClaveUnicaExportData(View, Content):
             enrolled_students = ClaveUnicaUser.objects.filter(
                 user__courseenrollment__course_id=course_key,
                 user__courseenrollment__is_active=1
-            ).values('user__id', 'user__username', 'user__email', 'run_num', 'run_dv', 'first_name', 'last_name')
+            ).order_by('user__username').values('user__id', 'user__username', 'user__email', 'run_num', 'run_dv', 'first_name', 'last_name')
 
             not_enrolled_students = ClaveUnicaUserCourseRegistration.objects.filter(course=course_key).values('run_num', 'run_dv', 'run_type')
             content, max_unit = self.get_content(info, id_course)
@@ -517,7 +549,7 @@ class ClaveUnicaExportData(View, Content):
         data.append("Puntos")
         data.append("Total")
         data.append("Certificado Generado")
-        
+
         return data
 
     def validate_course(self, id_curso):
@@ -528,8 +560,8 @@ class ClaveUnicaExportData(View, Content):
             return False
 
     def get_all_courses(self):
-        aux = CourseOverview.objects.all().values('id')
-        return [x['id'] for x in aux]
+        aux = CourseOverview.objects.all().order_by('display_name').values('id', 'display_name')
+        return [[x['id'], x['display_name']] for x in aux]
 
 
 class ClaveUnicaInfo(View):
@@ -591,7 +623,12 @@ class ClaveUnicaInfo(View):
                 context['no_exists'] = True
 
             registrations = ClaveUnicaUserCourseRegistration.objects.filter(run_num=run_num, run_dv=run_dv, run_type=run_type).values('id', 'course')
-            context['registrations'] = registrations
+            data = []
+            for r in registrations:
+                course_pending = CourseOverview.objects.filter(id=r['course']).values('display_name', 'start')
+                data.append([r['id'], r['course'], course_pending[0]['display_name'], course_pending[0]['start']])
+
+            context['registrations'] = data
 
             if registrations.count() > 0 or aux > 0:
                 context['info'] = True
@@ -648,7 +685,7 @@ class ClaveUnicaInfo(View):
         enrolled_course = CourseEnrollment.objects.filter(
             user=clave_user.user,
             is_active=1
-        ).values('id', 'course_id')
+        ).order_by('course__start').values('id', 'course_id', 'course__start', 'course__display_name')
 
         return enrolled_course
 

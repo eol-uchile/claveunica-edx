@@ -227,18 +227,24 @@ class TestCallbackView(TestCase):
         self.assertEqual(kwargs['course_id'], CourseLocator.from_string("course-v1:test+TEST+2019-4"))
 
 
-def always_true(x):
-    return True
-
-
-class TestStaffView(TestCase):
+class TestStaffView(ModuleStoreTestCase):
 
     def setUp(self):
-        self.client = Client()
-        user = User.objects.create_user(username='testuser', password='12345')
-        user.is_staff = True
-        user.save()
-        self.client.login(username='testuser', password='12345')
+        super(TestStaffView, self).setUp()
+        self.course = CourseFactory.create(org='mss', course='999', display_name='2020', emit_signals=True)
+        aux = CourseOverview.get_from_id(self.course.id)
+        with patch('student.models.cc.User.save'):
+            self.client = Client()
+            user = UserFactory(username='testuser3', password='12345', email='student2@edx.org', is_staff=True)
+            self.client.login(username='testuser3', password='12345')
+
+        ClaveUnicaUser.objects.create(
+            run_num=9472337,
+            run_dv="K",
+            run_type="RUN",
+            user=user,
+            first_name="test_name",
+            last_name="test_lastname")
 
         result = self.client.get(reverse('claveunica-login:staff'))
 
@@ -250,12 +256,11 @@ class TestStaffView(TestCase):
         self.assertEquals(response.status_code, 200)
         self.assertEqual(request['PATH_INFO'], '/claveunica/staff/')
 
-    @patch("claveunica.views.ClaveUnicaStaff.validate_course", side_effect=always_true)
-    def test_staff_post(self, _):
+    def test_staff_post(self):
         post_data = {
-            'runs': '19027537-k',
+            'runs': '10-8',
             'run_type': 'RUN',
-            'course': 'course-v1:mss+MSS001+2019_2',
+            'course': self.course.id,
             'modes': 'audit',
             'enroll': '1'
         }
@@ -263,21 +268,20 @@ class TestStaffView(TestCase):
         response = self.client.post(reverse('claveunica-login:staff'), post_data)
         self.assertEquals(response.status_code, 200)
 
-        aux = ClaveUnicaUserCourseRegistration.objects.get(run_num="19027537")
+        aux = ClaveUnicaUserCourseRegistration.objects.get(run_num="10")
 
-        self.assertEqual(aux.run_num, 19027537)
-        self.assertEqual(aux.run_dv, 'K')
+        self.assertEqual(aux.run_num, 10)
+        self.assertEqual(aux.run_dv, '8')
         self.assertEqual(aux.run_type, 'RUN')
         self.assertEqual(aux.mode, 'audit')
         self.assertEqual(aux.auto_enroll, True)
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 1)
 
-    @patch("claveunica.views.ClaveUnicaStaff.validate_course", side_effect=always_true)
-    def test_staff_post_multiple_run(self, _):
+    def test_staff_post_multiple_run(self):
         post_data = {
-            'runs': '19027537-k\n19027537-k\n19027537-k\n19027537-k\n19027537-k',
+            'runs': '10-8\n10-8\n10-8\n10-8\n10-8',
             'run_type': 'RUN',
-            'course': 'course-v1:mss+MSS001+2019_2',
+            'course': self.course.id,
             'modes': 'audit',
             'enroll': '1'
         }
@@ -285,20 +289,19 @@ class TestStaffView(TestCase):
         response = self.client.post(reverse('claveunica-login:staff'), post_data)
         self.assertEquals(response.status_code, 200)
 
-        aux = ClaveUnicaUserCourseRegistration.objects.filter(run_num="19027537")
+        aux = ClaveUnicaUserCourseRegistration.objects.filter(run_num="0000000108")
         for var in aux:
-            self.assertEqual(var.run_num, 19027537)
-            self.assertEqual(var.run_dv, 'K')
+            self.assertEqual(var.run_num, 10)
+            self.assertEqual(var.run_dv, '8')
             self.assertEqual(var.run_type, 'RUN')
             self.assertEqual(var.mode, 'audit')
             self.assertEqual(var.auto_enroll, True)
 
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 5)
 
-    @patch("claveunica.views.ClaveUnicaStaff.validate_course", side_effect=always_true)
-    def test_staff_post_sin_curso(self, _):
+    def test_staff_post_sin_curso(self):
         post_data = {
-            'runs': '19027537-k',
+            'runs': '10-8',
             'run_type': 'RUN',
             'course': '',
             'modes': 'audit',
@@ -310,12 +313,11 @@ class TestStaffView(TestCase):
         assert_true("id=\"curso2\"" in response._container[0])
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 0)
 
-    @patch("claveunica.views.ClaveUnicaStaff.validate_course", side_effect=always_true)
-    def test_staff_post_sin_run(self, _):
+    def test_staff_post_sin_run(self):
         post_data = {
             'runs': '',
             'run_type': 'RUN',
-            'course': 'course-v1:mss+MSS001+2019_2',
+            'course': self.course.id,
             'modes': 'audit',
             'enroll': '1'
         }
@@ -325,12 +327,11 @@ class TestStaffView(TestCase):
         assert_true("id=\"no_run\"" in response._container[0])
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 0)
 
-    @patch("claveunica.views.ClaveUnicaStaff.validate_course", side_effect=always_true)
-    def test_staff_post_run_malo(self, _):
+    def test_staff_post_run_malo(self):
         post_data = {
             'runs': '12345678-9',
             'run_type': 'RUN',
-            'course': 'course-v1:mss+MSS001+2019_2',
+            'course': self.course.id,
             'modes': 'audit',
             'enroll': '1'
         }
@@ -340,15 +341,47 @@ class TestStaffView(TestCase):
         assert_true("id=\"run_malos\"" in response._container[0])
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 0)
 
+    def test_staff_post_exits_user_enroll(self):
+        post_data = {
+            'runs': '9472337-k',
+            'run_type': 'RUN',
+            'course': self.course.id,
+            'modes': 'audit',
+            'enroll': '1'
+        }
 
-class TestInfoView(TestCase):
+        response = self.client.post(reverse('claveunica-login:staff'), post_data)
+        request = response.request
+        self.assertEquals(response.status_code, 200)
+        self.assertEqual(ClaveUnicaUserCourseRegistration.objects.count(), 0)
+        self.assertEqual(request['PATH_INFO'], '/claveunica/staff/')        
+        assert_true("id=\"run_saved_enroll\"" in response._container[0])
+
+    def test_staff_post_exits_user_no_enroll(self):
+        post_data = {
+            'runs': '9472337-k',
+            'run_type': 'RUN',
+            'course': self.course.id,
+            'modes': 'audit'
+        }
+
+        response = self.client.post(reverse('claveunica-login:staff'), post_data)
+        request = response.request
+        self.assertEquals(response.status_code, 200)
+        self.assertEqual(ClaveUnicaUserCourseRegistration.objects.count(), 0)
+        self.assertEqual(request['PATH_INFO'], '/claveunica/staff/')
+        assert_true("id=\"run_saved_enroll_no_auto\"" in response._container[0])
+
+
+class TestInfoView(ModuleStoreTestCase):
 
     def setUp(self):
-        self.client = Client()
-        self.user = User.objects.create_user(username='testuser', password='12345')
-        self.user.is_staff = True
-        self.user.save()
-        self.client.login(username='testuser', password='12345')
+        super(TestInfoView, self).setUp()
+
+        with patch('student.models.cc.User.save'):
+            self.client = Client()
+            self.user = UserFactory(username='testuser2', password='12345', email='student2@edx.org', is_staff=True)
+            self.client.login(username='testuser2', password='12345')
 
         result = self.client.get(reverse('claveunica-login:info'))
 
@@ -399,32 +432,36 @@ class TestInfoView(TestCase):
         assert_true("id=\"error\"" in response._container[0])
 
     def test_info_get_pending_course_exists(self):
+        course_1 = CourseFactory.create(org='mss', course='999', display_name='2020', emit_signals=True)
+        course_2 = CourseFactory.create(org='mss', course='888', display_name='2021', emit_signals=True)
+        aux = CourseOverview.get_from_id(course_1.id)
+        aux2 = CourseOverview.get_from_id(course_2.id)
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course="course-v1:test+TEST+2019-2",
+            course=course_1.id,
             mode="audit",
             auto_enroll=True)
         id_1 = ClaveUnicaUserCourseRegistration.objects.get(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course=CourseKey.from_string("course-v1:test+TEST+2019-2"),
+            course=course_1.id,
             mode="audit",
             auto_enroll=True)
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course="course-v1:test+TEST+2019-4",
+            course=course_2.id,
             mode="audit",
             auto_enroll=True)
         id_2 = ClaveUnicaUserCourseRegistration.objects.get(
             run_num=10,
             run_dv="8",
             run_type="RUN",
-            course=CourseKey.from_string("course-v1:test+TEST+2019-4"),
+            course=course_2.id,
             mode="audit",
             auto_enroll=True)
 
