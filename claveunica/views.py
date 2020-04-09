@@ -19,7 +19,7 @@ from opaque_keys.edx.keys import CourseKey, UsageKey
 from opaque_keys import InvalidKeyError
 from opaque_keys import InvalidKeyError
 from django.urls import reverse
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, Http404
 from django.shortcuts import redirect
 from collections import OrderedDict, defaultdict, deque
 from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
@@ -358,46 +358,51 @@ class ClaveUnicaExportData(View, Content):
     """
         Export student data from a course
     """
-
     def get(self, request):
-        error = request.GET.get("error", None)
+        if not request.user.is_anonymous and (request.user.has_perm('claveunica.is_staff_guest') or request.user.is_staff):
+            error = request.GET.get("error", None)
 
-        context = {'cursos': self.get_all_courses(), 'error': error}
-        return render(request, 'claveunica/infoexport.html', context)
-
+            context = {'cursos': self.get_all_courses(), 'error': error}
+            return render(request, 'claveunica/infoexport.html', context)
+        else:
+            raise Http404()
+     
     def post(self, request):
-        data = []
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="course.csv"'
-        writer = csv.writer(response, delimiter=';', dialect='excel', encoding='utf-8')
+        if not request.user.is_anonymous and (request.user.has_perm('claveunica.is_staff_guest') or request.user.is_staff):
+            data = []
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="course.csv"'
+            writer = csv.writer(response, delimiter=';', dialect='excel', encoding='utf-8')
 
-        course_id = request.POST.get('id')
-        if self.validate_course(course_id):
-            course_key = CourseKey.from_string(course_id)
-            course = get_course_with_access(request.user, "load", course_key)
-            store = modulestore()
-            info = self.dump_module(store.get_course(course_key))
-            id_course = str(BlockUsageLocator(course_key, "course", "course"))
-            if 'i4x://' in id_course:
-                id_course = str(BlockUsageLocator(course_key, "course", course.display_name))
+            course_id = request.POST.get('id')
+            if self.validate_course(course_id):
+                course_key = CourseKey.from_string(course_id)
+                course = get_course_with_access(request.user, "load", course_key)
+                store = modulestore()
+                info = self.dump_module(store.get_course(course_key))
+                id_course = str(BlockUsageLocator(course_key, "course", "course"))
+                if 'i4x://' in id_course:
+                    id_course = str(BlockUsageLocator(course_key, "course", course.display_name))
 
-            enrolled_students = ClaveUnicaUser.objects.filter(
-                user__courseenrollment__course_id=course_key,
-                user__courseenrollment__is_active=1
-            ).order_by('user__username').values('user__id', 'user__username', 'user__email', 'run_num', 'run_dv', 'first_name', 'last_name')
+                enrolled_students = ClaveUnicaUser.objects.filter(
+                    user__courseenrollment__course_id=course_key,
+                    user__courseenrollment__is_active=1
+                ).order_by('user__username').values('user__id', 'user__username', 'user__email', 'run_num', 'run_dv', 'first_name', 'last_name')
 
-            not_enrolled_students = ClaveUnicaUserCourseRegistration.objects.filter(course=course_key).values('run_num', 'run_dv', 'run_type')
-            content, max_unit = self.get_content(info, id_course)
+                not_enrolled_students = ClaveUnicaUserCourseRegistration.objects.filter(course=course_key).values('run_num', 'run_dv', 'run_type')
+                content, max_unit = self.get_content(info, id_course)
 
-            user_tick = self.get_ticks(
-                content, info, enrolled_students, course_key, max_unit, not_enrolled_students)
+                user_tick = self.get_ticks(
+                    content, info, enrolled_students, course_key, max_unit, not_enrolled_students)
 
-            writer.writerows(user_tick['data'])
+                writer.writerows(user_tick['data'])
 
-            return response
+                return response
 
-        url = '{}?{}'.format(reverse('claveunica-login:infoexport'), urlencode({'error': 'error'}))
-        return redirect(url)
+            url = '{}?{}'.format(reverse('claveunica-login:infoexport'), urlencode({'error': 'error'}))
+            return redirect(url)
+        else:
+            raise Http404()   
 
     def get_ticks(
             self,

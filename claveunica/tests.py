@@ -4,7 +4,8 @@ from django.urls import reverse
 from django.test import TestCase, Client
 from django.test import Client
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
+from django.contrib.contenttypes.models import ContentType
 from urlparse import parse_qs
 from openedx.core.lib.tests.tools import assert_true
 from opaque_keys.edx.locator import CourseLocator
@@ -677,6 +678,15 @@ class TestExportDataView(ModuleStoreTestCase):
         with patch('student.models.cc.User.save'):
             # Create the student
             self.student = UserFactory(username='student', password='test', email='student@edx.org')
+            content_type = ContentType.objects.get_for_model(ClaveUnicaUser)
+            permission = Permission.objects.get(
+                codename='is_staff_guest',
+                content_type=content_type,
+            )
+            self.student.user_permissions.add(permission)
+            # Log in the user staff
+            self.student_client = Client()
+            assert_true(self.student_client.login(username='student', password='test'))
             # Enroll the student in the course
             CourseEnrollmentFactory(user=self.student, course_id=self.course.id)
             ClaveUnicaUser.objects.create(
@@ -781,3 +791,33 @@ class TestExportDataView(ModuleStoreTestCase):
 
         self.assertEquals(response.status_code, 302)
         self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/export?error=error'))
+    
+    def test_infoexport_get_user_is_staff_guest(self):
+        response = self.student_client.get(reverse('claveunica-login:infoexport'))
+
+        self.assertEquals(response.status_code, 200)        
+    
+    def test_infoexport_get_user_is_anonymous(self):
+        anonymous_client = Client()
+        response = anonymous_client.get(reverse('claveunica-login:infoexport'))
+
+        self.assertEquals(response.status_code, 404)
+        
+    def test_infoexport_post_user_is_staff_guest(self):
+        post_data = {
+            'id': str(self.course.id)
+        }
+        response = self.student_client.post(reverse('claveunica-login:infoexport'), post_data)
+
+        self.assertEquals(response._headers['content-type'], ('Content-Type', 'text/csv'))
+        data = response.content.split("\r\n")
+        self.assertEqual(data[0], "Run;Nombre;Email;Username;1.1.1;Puntos;Total;Certificado Generado")
+        self.assertEqual(data[-5], '998;test_name test_lastname;student@edx.org;student;;0/1;0/1;No')
+
+    def test_infoexport_post_user_is_anonymous(self):
+        anonymous_client = Client()
+        post_data = {
+            'id': str(self.course.id)
+        }
+        response = anonymous_client.post(reverse('claveunica-login:infoexport'), post_data)
+        self.assertEquals(response.status_code, 404)
