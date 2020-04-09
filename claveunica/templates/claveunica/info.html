@@ -54,7 +54,7 @@
                 <label style="cursor: default;"><strong>Rut:</strong> ${rut}</label></br>
                 <label style="cursor: default;"><strong>Correo:</strong> ${clave_user.user.email} </label></br></br>
             </div>
-            % endif  
+            % endif
             % if context.get('info', UNDEFINED) is True:           
                 <div style="text-align: center">                
                     <table style="text-align: center;margin-left:auto;margin-right:auto;border: 1;">
@@ -62,12 +62,12 @@
                             <tr>
                                 <td>Id</td>
                                 <td>Curso</td>
-                                <td>Inicio</td>                            
+                                <td>Inicio</td>
                                 <td>Estado</td>
-                                <td>Acciones</td>                            
+                                <td>Acciones</td>
                             </tr>
                         </thead>
-                        <tbody id="tabla-curso">                        
+                        <tbody id="tabla-curso">
                         %for curso in registrations:
                         <form method="POST">  
                             <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/> 
@@ -75,35 +75,43 @@
                             <tr id="${curso[0]}">
                                 <td>${curso[1]}</td>
                                 <td>${curso[2]}</td>
-                                <td>${curso[3]}</td>                       
-                                <td>Pendiente</td>                       
+                                <td>${curso[3]}</td>
+                                <td>Pendiente</td>
                                 <td>
-                                    <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                                    
+                                    % if context.get('is_staff_guest', UNDEFINED) is True: 
+                                        <input disabled type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">
+                                    % else:
+                                        <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                        
+                                    % endif
                                 </td>
                             </tr>
                         </form>
                         %endfor
                         % if context.get('enrolled_course', UNDEFINED) is not UNDEFINED:                    
                             % for curso in enrolled_course:
-                            <form method="POST">  
+                            <form method="POST">
                                 <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/> 
                                 <input type="hidden" id="id" name="id" value="${curso['id']},enroll,${rut}"/> 
                                 <tr id="${curso['id']}">                                    
                                     <td>${curso['course_id']}</td>  
-                                    <td>${curso['course__display_name']}</td>  
-                                    <td>${curso['course__start']}</td>                      
-                                    <td>Ingresado</td>                       
+                                    <td>${curso['course__display_name']}</td>
+                                    <td>${curso['course__start']}</td>
+                                    <td>Ingresado</td>
                                     <td>
-                                        <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                                   
+                                        % if context.get('is_staff_guest', UNDEFINED) is True: 
+                                            <input disabled type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">
+                                        % else:
+                                            <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                        
+                                        % endif
                                     </td>
-                                </tr>                    
+                                </tr>
                             </form>
                             %endfor
-                        % endif       
+                        % endif
                         </tbody>
                     </table>
-                </div>            
-            % endif           
+                </div>
+            % endif
         </section>
     % endif
 </main>
