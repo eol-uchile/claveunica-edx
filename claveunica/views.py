@@ -402,7 +402,7 @@ class ClaveUnicaExportData(View, Content):
             url = '{}?{}'.format(reverse('claveunica-login:infoexport'), urlencode({'error': 'error'}))
             return redirect(url)
         else:
-            raise Http404()   
+            raise Http404()
 
     def get_ticks(
             self,
@@ -591,19 +591,28 @@ class ClaveUnicaInfo(View):
             return False
 
     def get(self, request):
-        run = request.GET.get("rut", None)
-        success = request.GET.get("success", None)
-        if request.GET.get("error", None) == 'error':
-            context = {'error': True}
+        if not request.user.is_anonymous and (request.user.has_perm('claveunica.is_staff_guest') or request.user.is_staff):
+            run = request.GET.get("rut", None)
+            success = request.GET.get("success", None)
+            if request.GET.get("error", None) == 'error':
+                context = {'error': True}
+                return render(request, 'claveunica/info.html', context)
+
+            if run is None:
+                return render(request, 'claveunica/info.html', context=None)
+
+            context = {'rut': run, 'success': success}
+            if request.user.has_perm('claveunica.is_staff_guest'):
+                context['is_staff_guest'] = True
+            
+            if request.user.is_staff:
+                context['is_staff_guest'] = False
+
+            context = self.data_validation(run, context)
+
             return render(request, 'claveunica/info.html', context)
-
-        if run is None:
-            return render(request, 'claveunica/info.html', context=None)
-
-        context = {'rut': run, 'success': success}
-        context = self.data_validation(run, context)
-
-        return render(request, 'claveunica/info.html', context)
+        else:
+            raise Http404()
 
     def data_validation(self, run, context):
         run = run.upper()
@@ -644,30 +653,33 @@ class ClaveUnicaInfo(View):
         return context
 
     def post(self, request):
-        from student.models import CourseEnrollment, CourseEnrollmentAllowed
-        data = request.POST.get('id').split(',')
-        try:
-            course_id = int(data[0])
-            enroll = data[1]
-            rut = data[2]
-            if enroll == 'pending' and self.validation_pending(course_id):
-                registrations = ClaveUnicaUserCourseRegistration.objects.get(id=course_id)
-                registrations.delete()
-                url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'rut': rut, 'success': 'success'}))
+        if request.user.is_staff:
+            from student.models import CourseEnrollment, CourseEnrollmentAllowed
+            data = request.POST.get('id').split(',')
+            try:
+                course_id = int(data[0])
+                enroll = data[1]
+                rut = data[2]
+                if enroll == 'pending' and self.validation_pending(course_id):
+                    registrations = ClaveUnicaUserCourseRegistration.objects.get(id=course_id)
+                    registrations.delete()
+                    url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'rut': rut, 'success': 'success'}))
+                    return redirect(url)
+
+                if enroll == 'enroll' and self.validation_enroll(course_id):
+                    enrollment = CourseEnrollment.objects.get(id=course_id)
+                    enrollment.delete()
+                    url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'rut': rut, 'success': 'success'}))
+                    return redirect(url)
+
+                url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'error': 'error'}))
                 return redirect(url)
 
-            if enroll == 'enroll' and self.validation_enroll(course_id):
-                enrollment = CourseEnrollment.objects.get(id=course_id)
-                enrollment.delete()
-                url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'rut': rut, 'success': 'success'}))
+            except (IndexError, ValueError):
+                url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'error': 'error'}))
                 return redirect(url)
-
-            url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'error': 'error'}))
-            return redirect(url)
-
-        except (IndexError, ValueError):
-            url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'error': 'error'}))
-            return redirect(url)
+        else:
+            raise Http404()
 
     def validation_pending(self, course_id):
         vali = True

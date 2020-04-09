@@ -15,7 +15,7 @@ class ClaveUnicaUser(models.Model):
             ["run_num", "run_dv", "run_type"],
         ]
         permissions = [
-            ("is_staff_guest", "Can View claveunica/info/export"),            
+            ("is_staff_guest", "Can View claveunica/info"),            
         ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=False, null=False)
     run_num = models.BigIntegerField()
