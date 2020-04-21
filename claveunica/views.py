@@ -358,6 +358,7 @@ class ClaveUnicaExportData(View, Content):
     """
         Export student data from a course
     """
+
     def get(self, request):
         if not request.user.is_anonymous and (request.user.has_perm('claveunica.is_staff_guest') or request.user.is_staff):
             error = request.GET.get("error", None)
@@ -366,7 +367,7 @@ class ClaveUnicaExportData(View, Content):
             return render(request, 'claveunica/infoexport.html', context)
         else:
             raise Http404()
-     
+
     def post(self, request):
         if not request.user.is_anonymous and (request.user.has_perm('claveunica.is_staff_guest') or request.user.is_staff):
             data = []
@@ -604,7 +605,7 @@ class ClaveUnicaInfo(View):
             context = {'rut': run, 'success': success}
             if request.user.has_perm('claveunica.is_staff_guest'):
                 context['is_staff_guest'] = True
-            
+
             if request.user.is_staff:
                 context['is_staff_guest'] = False
 
@@ -632,7 +633,10 @@ class ClaveUnicaInfo(View):
                 enrolled_course = self.list_course_enrolled(clave_user)
                 context['enrolled_course'] = enrolled_course
                 context['clave_user'] = clave_user
-                aux = len(enrolled_course)
+
+                allowed_course = self.list_course_allowed(clave_user)
+                context['allowed_course'] = allowed_course
+                aux = len(enrolled_course) + len(allowed_course)
             else:
                 context['no_exists'] = True
 
@@ -672,6 +676,12 @@ class ClaveUnicaInfo(View):
                     url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'rut': rut, 'success': 'success'}))
                     return redirect(url)
 
+                if enroll == 'allowed' and self.validation_allowed(course_id):
+                    allowed = CourseEnrollmentAllowed.objects.get(id=course_id)
+                    allowed.delete()
+                    url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'rut': rut, 'success': 'success'}))
+                    return redirect(url)
+
                 url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'error': 'error'}))
                 return redirect(url)
 
@@ -696,6 +706,14 @@ class ClaveUnicaInfo(View):
 
         return vali
 
+    def validation_allowed(self, course_id):
+        from student.models import CourseEnrollment, CourseEnrollmentAllowed
+        vali = True
+        if not CourseEnrollmentAllowed.objects.filter(id=course_id).exists():
+            vali = False
+
+        return vali
+
     def list_course_enrolled(self, clave_user):
         from student.models import CourseEnrollment, CourseEnrollmentAllowed
 
@@ -705,6 +723,18 @@ class ClaveUnicaInfo(View):
         ).order_by('course__start').values('id', 'course_id', 'course__start', 'course__display_name')
 
         return enrolled_course
+
+    def list_course_allowed(self, clave_user):
+        from student.models import CourseEnrollment, CourseEnrollmentAllowed
+        allowed_course = []
+        aux_allowed_course = CourseEnrollmentAllowed.objects.filter(
+            user=clave_user.user,
+            user__is_active=1
+        ).values('id', 'course_id')
+        for course in aux_allowed_course:
+            allowed = CourseOverview.objects.filter(id=course['course_id']).values('display_name', 'start')
+            allowed_course.append([course['id'], course['course_id'], allowed[0]['display_name'], allowed[0]['start']])
+        return allowed_course
 
 
 class ClaveUnicaCallback(View):
