@@ -108,6 +108,27 @@
                             </form>
                             %endfor
                         % endif
+                        % if context.get('allowed_course', UNDEFINED) is not UNDEFINED:                    
+                            % for curso in allowed_course:
+                            <form method="POST">
+                                <input type="hidden" name="csrfmiddlewaretoken" value="${csrf_token}"/> 
+                                <input type="hidden" id="id" name="id" value="${curso[0]},allowed,${rut}"/> 
+                                <tr id="${curso[0]}">                                    
+                                    <td>${curso[1]}</td>
+                                    <td>${curso[2]}</td>
+                                    <td>${curso[3]}</td>
+                                    <td>Ingresado sin </br>Auto Enroll</td>
+                                    <td>
+                                        % if context.get('is_staff_guest', UNDEFINED) is True: 
+                                            <input disabled type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">
+                                        % else:
+                                            <input type="submit" style="text-shadow: none; border-color:white; background-color: #be0010; background-image: none; display:block; margin: auto" value="Desinscribir">                                        
+                                        % endif
+                                    </td>
+                                </tr>
+                            </form>
+                            %endfor
+                        % endif
                         </tbody>
                     </table>
                 </div>
