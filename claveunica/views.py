@@ -672,7 +672,8 @@ class ClaveUnicaInfo(View):
 
                 if enroll == 'enroll' and self.validation_enroll(course_id):
                     enrollment = CourseEnrollment.objects.get(id=course_id)
-                    enrollment.delete()
+                    enrollment.is_active = 0
+                    enrollment.save()
                     url = '{}?{}'.format(reverse('claveunica-login:info'), urlencode({'rut': rut, 'success': 'success'}))
                     return redirect(url)
 
