@@ -87,6 +87,9 @@ class ClaveUnicaLoginRedirect(View):
 
 class ClaveUnicaStaff(View):
     def validarRut(self, rut):
+        """
+            Verify if the 'rut' is valid
+        """
         rut = rut.upper()
         rut = rut.replace("-", "")
         rut = rut.replace(".", "")
@@ -107,6 +110,9 @@ class ClaveUnicaStaff(View):
             return False
 
     def validate_course(self, id_curso):
+        """
+            Verify if course.id exists
+        """
         try:
             aux = CourseKey.from_string(id_curso)
             return CourseOverview.objects.filter(id=aux).exists()
@@ -114,6 +120,9 @@ class ClaveUnicaStaff(View):
             return False
 
     def validate_data(self, request, lista_run, context):
+        """
+            Verify if the data if valid
+        """
         run_malos = ""
         # validacion de los run
         for run in lista_run:
@@ -559,6 +568,9 @@ class ClaveUnicaExportData(View, Content):
         return data
 
     def validate_course(self, id_curso):
+        """
+            Verify if course.id exists
+        """
         try:
             aux = CourseKey.from_string(id_curso)
             return CourseOverview.objects.filter(id=aux).exists()
@@ -566,12 +578,21 @@ class ClaveUnicaExportData(View, Content):
             return False
 
     def get_all_courses(self):
+        """
+            Return a list with id and display name of all courses
+        """
         aux = CourseOverview.objects.all().order_by('display_name').values('id', 'display_name')
         return [[x['id'], x['display_name']] for x in aux]
 
 
 class ClaveUnicaInfo(View):
+    """
+        View where search all courses from a student by 'run' parameter
+    """
     def validarRut(self, rut):
+        """
+            Verify if the 'rut' is valid
+        """
         rut = rut.upper()
         rut = rut.replace("-", "")
         rut = rut.replace(".", "")
@@ -616,6 +637,9 @@ class ClaveUnicaInfo(View):
             raise Http404()
 
     def data_validation(self, run, context):
+        """
+            Verify if data is valid
+        """
         run = run.upper()
         run = run.replace("-", "")
         run = run.replace(".", "")
@@ -693,6 +717,9 @@ class ClaveUnicaInfo(View):
             raise Http404()
 
     def validation_pending(self, course_id):
+        """
+            Verify if exists course in ClaveUnicaUserCourseRegistration
+        """
         vali = True
         if not ClaveUnicaUserCourseRegistration.objects.filter(id=course_id).exists():
             vali = False
@@ -700,6 +727,9 @@ class ClaveUnicaInfo(View):
         return vali
 
     def validation_enroll(self, course_id):
+        """
+            Verify if exists course in CourseEnrollment
+        """
         from student.models import CourseEnrollment, CourseEnrollmentAllowed
         vali = True
         if not CourseEnrollment.objects.filter(id=course_id).exists():
@@ -708,6 +738,9 @@ class ClaveUnicaInfo(View):
         return vali
 
     def validation_allowed(self, course_id):
+        """
+            Verify if exists course in CourseEnrollmentAllowed
+        """
         from student.models import CourseEnrollment, CourseEnrollmentAllowed
         vali = True
         if not CourseEnrollmentAllowed.objects.filter(id=course_id).exists():
@@ -716,6 +749,9 @@ class ClaveUnicaInfo(View):
         return vali
 
     def list_course_enrolled(self, clave_user):
+        """
+            Return a list with CourseEnrollment courses of user
+        """
         from student.models import CourseEnrollment, CourseEnrollmentAllowed
 
         enrolled_course = CourseEnrollment.objects.filter(
@@ -726,6 +762,9 @@ class ClaveUnicaInfo(View):
         return enrolled_course
 
     def list_course_allowed(self, clave_user):
+        """
+            Return a list with CourseEnrollmentAllowed courses of user
+        """
         from student.models import CourseEnrollment, CourseEnrollmentAllowed
         allowed_course = []
         aux_allowed_course = CourseEnrollmentAllowed.objects.filter(
