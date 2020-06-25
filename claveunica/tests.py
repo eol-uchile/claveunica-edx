@@ -37,6 +37,9 @@ class TestRedirectView(TestCase):
         self.assertIsNotNone(self.client.session['cu_state'])
 
     def test_return_request(self):
+        """
+            Test if return request is correct
+        """
         result = self.client.get(reverse('claveunica-login:login'))
         request = urlparse.urlparse(result.url)
         args = urlparse.parse_qs(request.query)
@@ -51,6 +54,9 @@ class TestRedirectView(TestCase):
         self.assertEqual(args['redirect_uri'][0], 'http://testserver/claveunica/callback')
 
     def test_redirect_already_logged(self):
+        """
+            Test redirect when the user is already logged
+        """
         user = User.objects.create_user(username='testuser', password='123')
         self.client.login(username='testuser', password='123')
         result = self.client.get(reverse('claveunica-login:login'))
@@ -83,6 +89,9 @@ class TestCallbackView(TestCase):
 
     @patch("requests.post")
     def test_login_parameters(self, post):
+        """
+            Test normal process
+        """
         state = self.client.session['cu_state']
         post.side_effect = [namedtuple("Request", ["status_code", "text"])(200, json.dumps({'access_token': '67890'})), namedtuple("Request", ["status_code", "text"])(200, json.dumps({"sub": "2", "email": "a@b.c", "RolUnico": {"numero": 55555555, "DV": "5", "tipo": "RUN"}, "name": {"nombres": ['Maria', 'Carmen', 'De', 'Los', 'Angeles'], "apellidos": ['Del', ' Rio', 'Gonzalez']}}))]
         result = self.client.get(reverse('claveunica-login:callback'), data={'state': self.client.session['cu_state'], 'code': 'code'})
@@ -101,6 +110,9 @@ class TestCallbackView(TestCase):
     @patch("claveunica.views.ClaveUnicaCallback.create_user_by_data", side_effect=create_user)
     @patch("requests.post")
     def test_login_create_user(self, post, mock_created_user):
+        """
+            Test create user normal process
+        """
         state = self.client.session['cu_state']
         post.side_effect = [namedtuple("Request", ["status_code", "text"])(200, json.dumps({'access_token': '67890'})), namedtuple("Request", ["status_code", "text"])(200, json.dumps({"sub": "2", "email": "a@b.c", "RolUnico": {"numero": 55555555, "DV": "5", "tipo": "RUN"}, "name": {"nombres": ['Maria', 'Carmen', 'De', 'Los', 'Angeles'], "apellidos": ['Del', ' Rio', 'Gonzalez']}}))]
         result = self.client.get(reverse('claveunica-login:callback'), data={'state': self.client.session['cu_state'], 'code': 'code'})
@@ -108,6 +120,9 @@ class TestCallbackView(TestCase):
 
     @patch("requests.post")
     def test_login_wrong_state(self, post):
+        """
+            Test create user when state is wrong
+        """
         post.side_effect = [namedtuple("Request", ["status_code", "text"])(200, json.dumps({'access_token': '67890'})), namedtuple("Request", ["status_code", "text"])(200, json.dumps({"sub": "2", "email": "a@b.c", "RolUnico": {"numero": 55555555, "DV": "5", "tipo": "RUN"}, "name": {"nombres": ['Maria', 'Carmen', 'De', 'Los', 'Angeles'], "apellidos": ['Del', ' Rio', 'Gonzalez']}}))]
         result = self.client.get(reverse('claveunica-login:callback'), data={'state': 'WRONG-STATE', 'code': 'code'}, follow=False)
 
@@ -115,7 +130,10 @@ class TestCallbackView(TestCase):
         self.assertEqual(request.path, '/claveunica/login/')
 
     @patch("requests.post")
-    def test_login_wrong_state(self, post):
+    def test_login_fail_access_token(self, post):
+        """
+            Test create user when fail access token
+        """
         post.side_effect = [namedtuple("Request", ["status_code", "text"])(401, json.dumps({})), namedtuple("Request", ["status_code", "text"])(200, json.dumps({"sub": "2", "email": "a@b.c", "RolUnico": {"numero": 55555555, "DV": "5", "tipo": "RUN"}, "name": {"nombres": ['Maria', 'Carmen', 'De', 'Los', 'Angeles'], "apellidos": ['Del', ' Rio', 'Gonzalez']}}))]
         result = self.client.get(reverse('claveunica-login:callback'), data={'state': self.client.session['cu_state'], 'code': 'code'}, follow=False)
 
@@ -124,6 +142,9 @@ class TestCallbackView(TestCase):
 
     @patch("claveunica.views.ClaveUnicaCallback.create_user_by_data", side_effect=create_user)
     def test_generate_username(self, _):
+        """
+            Test callback generate username normal process
+        """
         data = {
             'RolUnico': {
                 'numero': 12345,
@@ -150,6 +171,9 @@ class TestCallbackView(TestCase):
 
     @patch("claveunica.views.ClaveUnicaCallback.create_user_by_data", side_effect=create_user)
     def test_generate_username_complex(self, _):
+        """
+            Test callback generate username complex
+        """
         return
         data = {
             'RolUnico': {
@@ -172,6 +196,9 @@ class TestCallbackView(TestCase):
 
     @patch("claveunica.views.ClaveUnicaCallback.create_user_by_data", side_effect=create_user)
     def test_long_name(self, _):
+        """
+            Test callback generate username long name
+        """
         data = {
             'RolUnico': {
                 'numero': 12345,
@@ -188,6 +215,9 @@ class TestCallbackView(TestCase):
 
     @patch("claveunica.views.ClaveUnicaCallback.create_user_by_data", side_effect=create_user)
     def test_long_name_middle(self, _):
+        """
+            Test callback generate username when long name middle
+        """
         data = {
             'RolUnico': {
                 'numero': 12345,
@@ -205,6 +235,9 @@ class TestCallbackView(TestCase):
     @patch("claveunica.views.ClaveUnicaCallback.create_user_by_data", side_effect=create_user)
     @patch("requests.post")
     def test_test(self, post, _):
+        """
+            Test callback enroll when user have pending course with auto enroll and not auto enroll
+        """
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=55555555,
             run_dv="5",
@@ -251,7 +284,9 @@ class TestStaffView(ModuleStoreTestCase):
         result = self.client.get(reverse('claveunica-login:staff'))
 
     def test_staff_get(self):
-
+        """
+            Test staff view
+        """
         response = self.client.get(reverse('claveunica-login:staff'))
         request = response.request
 
@@ -259,6 +294,9 @@ class TestStaffView(ModuleStoreTestCase):
         self.assertEqual(request['PATH_INFO'], '/claveunica/staff/')
 
     def test_staff_post(self):
+        """
+            Test staff view post normal process
+        """
         post_data = {
             'runs': '10-8',
             'run_type': 'RUN',
@@ -280,6 +318,9 @@ class TestStaffView(ModuleStoreTestCase):
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 1)
 
     def test_staff_post_multiple_run(self):
+        """
+            Test staff view post with multiple 'run'
+        """
         post_data = {
             'runs': '10-8\n10-8\n10-8\n10-8\n10-8',
             'run_type': 'RUN',
@@ -302,6 +343,9 @@ class TestStaffView(ModuleStoreTestCase):
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 5)
 
     def test_staff_post_sin_curso(self):
+        """
+            Test staff view post when course is empty
+        """
         post_data = {
             'runs': '10-8',
             'run_type': 'RUN',
@@ -316,6 +360,9 @@ class TestStaffView(ModuleStoreTestCase):
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 0)
 
     def test_staff_post_sin_run(self):
+        """
+            Test staff view post when 'runs' is empty
+        """
         post_data = {
             'runs': '',
             'run_type': 'RUN',
@@ -330,6 +377,9 @@ class TestStaffView(ModuleStoreTestCase):
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 0)
 
     def test_staff_post_run_malo(self):
+        """
+            Test staff view post when 'runs' is wrong
+        """
         post_data = {
             'runs': '12345678-9',
             'run_type': 'RUN',
@@ -344,6 +394,9 @@ class TestStaffView(ModuleStoreTestCase):
         self.assertEquals(ClaveUnicaUserCourseRegistration.objects.all().count(), 0)
 
     def test_staff_post_exits_user_enroll(self):
+        """
+            Test staff view post with auto enroll
+        """
         post_data = {
             'runs': '9472337-k',
             'run_type': 'RUN',
@@ -360,6 +413,9 @@ class TestStaffView(ModuleStoreTestCase):
         assert_true("id=\"run_saved_enroll\"" in response._container[0])
 
     def test_staff_post_exits_user_no_enroll(self):
+        """
+            Test staff view post without auto enroll
+        """
         post_data = {
             'runs': '9472337-k',
             'run_type': 'RUN',
@@ -407,6 +463,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEqual(request['PATH_INFO'], '/claveunica/info/')
 
     def test_info_get_no_course(self):
+        """
+            Test info view get without course
+        """
         get_data = {
             'rut': '10-8'
         }
@@ -421,6 +480,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("id=\"no_info\"" in response._container[0])
 
     def test_info_wrong_rut(self):
+        """
+            Test info view get with wrong 'rut'
+        """
         get_data = {
             'rut': '10-9'
         }
@@ -433,6 +495,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("id=\"wrong_rut\"" in response._container[0])
 
     def test_info_error(self):
+        """
+            Test info view with error message
+        """
         get_data = {
             'error': 'error'
         }
@@ -445,6 +510,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("id=\"error\"" in response._container[0])
 
     def test_info_get_pending_course_exists(self):
+        """
+            Test info view get with pending course
+        """
         course_1 = CourseFactory.create(org='mss', course='999', display_name='2020', emit_signals=True)
         course_2 = CourseFactory.create(org='mss', course='888', display_name='2021', emit_signals=True)
         aux = CourseOverview.get_from_id(course_1.id)
@@ -493,6 +561,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("value=\"" + str(id_2.id) + ",pending,108\"" in response._container[0])
 
     def test_info_get_enroll_course_exists(self):
+        """
+            Test info view get with enroll course
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -516,6 +587,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("value=\"1,enroll,108\"" in response._container[0])
 
     def test_info_get_allowed_course_exists(self):
+        """
+            Test info view get with allowed courses
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -540,6 +614,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("value=\"1,allowed,108\"" in response._container[0])
 
     def test_info_post_pending_course_exists_unenroll(self):
+        """
+            Test info view post unenroll pending course
+        """
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=10,
             run_dv="8",
@@ -565,6 +642,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEqual(ClaveUnicaUserCourseRegistration.objects.filter(run_num=10, run_dv='8', run_type='RUN').count(), 1)
 
     def test_info_post_pending_course_no_exists_unenroll(self):
+        """
+            Test info view post unenroll pending course when course no exists
+        """
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=10,
             run_dv="8",
@@ -589,6 +669,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEqual(ClaveUnicaUserCourseRegistration.objects.filter(run_num=10, run_dv='8', run_type='RUN').count(), 2)
 
     def test_info_post_pending_course_wrong_data_unenroll(self):
+        """
+            Test info view post unenroll pending course with wrong data
+        """
         ClaveUnicaUserCourseRegistration.objects.create(
             run_num=10,
             run_dv="8",
@@ -613,6 +696,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEqual(ClaveUnicaUserCourseRegistration.objects.filter(run_num=10, run_dv='8', run_type='RUN').count(), 2)
 
     def test_info_post_enroll_course_exists_unenroll(self):
+        """
+            Test info view post unenroll enroll course
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -636,6 +722,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("id=\"no_info\"" in response._container[0])
 
     def test_info_post_enroll_course_no_exists_unenroll(self):
+        """
+            Test info view post unenroll enroll course no exists
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -654,6 +743,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/?error=error'))
 
     def test_info_post_enroll_course_wrong_data_unenroll(self):
+        """
+            Test info view post unenroll enroll course with wrong data
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -672,6 +764,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/?error=error'))
 
     def test_info_post_allowed_course_exists_unenroll(self):
+        """
+            Test info view post unenroll allowed course
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -695,6 +790,9 @@ class TestInfoView(ModuleStoreTestCase):
         assert_true("id=\"no_info\"" in response._container[0])
 
     def test_info_post_allowed_course_no_exists_unenroll(self):
+        """
+            Test info view post unenroll allowed course no exists
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -713,6 +811,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/?error=error'))
 
     def test_info_post_allowed_course_wrong_data_unenroll(self):
+        """
+            Test info view post unenroll allowed course with wrong data
+        """
         ClaveUnicaUser.objects.create(
             run_num=10,
             run_dv="8",
@@ -731,7 +832,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/?error=error'))
 
     def test_info_get_user_is_staff_guest(self):
-
+        """
+            Test info view get when user have permission
+        """
         response = self.student_client.get(reverse('claveunica-login:info'))
         request = response.request
 
@@ -739,6 +842,9 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEqual(request['PATH_INFO'], '/claveunica/info/')
 
     def test_info_post_user_is_staff_guest(self):
+        """
+            Test info view post when user have permission
+        """
         post_data = {
             'id': '1,pending,108'
         }
@@ -747,12 +853,18 @@ class TestInfoView(ModuleStoreTestCase):
         self.assertEquals(response.status_code, 404)
 
     def test_info_get_user_is_anonymous(self):
+        """
+            Test info view get when user is anonymous
+        """
         anonymous_client = Client()
         response = anonymous_client.get(reverse('claveunica-login:info'))
 
         self.assertEquals(response.status_code, 404)
 
     def test_info_post_user_is_anonymous(self):
+        """
+            Test info view get when user is anonynous
+        """
         anonymous_client = Client()
         post_data = {
             'id': '1,pending,108'
@@ -829,6 +941,9 @@ class TestExportDataView(ModuleStoreTestCase):
             assert_true(self.staff_client.login(username='staff_user', password='test'))
 
     def test_infoexport_get(self):
+        """
+            Test infoexport get if course id is in the view
+        """
         aux = CourseOverview.get_from_id(self.course.id)
 
         response = self.staff_client.get(reverse('claveunica-login:infoexport'))
@@ -839,6 +954,9 @@ class TestExportDataView(ModuleStoreTestCase):
         assert_true("value=\"" + str(self.course.id) + "\"" in response._container[0])
 
     def test_infoexport_post(self):
+        """
+            Test infoexport post normal process
+        """
         post_data = {
             'id': str(self.course.id)
         }
@@ -850,6 +968,9 @@ class TestExportDataView(ModuleStoreTestCase):
         self.assertEqual(data[-5], '998;test_name test_lastname;student@edx.org;student;;0/1;0/1;No')
 
     def test_infoexport_post_with_pending_student(self):
+        """
+            Test infoexport post normal process
+        """
         post_data = {
             'id': str(self.course.id)
         }
@@ -879,6 +1000,9 @@ class TestExportDataView(ModuleStoreTestCase):
         self.assertEqual(data[-2], '1010;test_name test_lastname;student@edx.org')
 
     def test_infoexport_post_blockcompletion(self):
+        """
+            Test infoexport post normal process with block completion
+        """
         post_data = {
             'id': str(self.course.id)
         }
@@ -898,6 +1022,9 @@ class TestExportDataView(ModuleStoreTestCase):
         self.assertEqual(data[-5], '998;test_name test_lastname;student@edx.org;student;X;1/1;1/1;No')
 
     def test_infoexport_post_certificate(self):
+        """
+            Test infoexport post normal process with certificate
+        """
         GeneratedCertificate.objects.create(user=self.student, course_id=self.course.id)
         post_data = {
             'id': str(self.course.id)
@@ -910,6 +1037,9 @@ class TestExportDataView(ModuleStoreTestCase):
         self.assertEqual(data[-5], '998;test_name test_lastname;student@edx.org;student;;0/1;0/1;Si')
 
     def test_infoexport_post_wrong_id(self):
+        """
+            Test infoexport post when id course is wrong
+        """
         post_data = {
             'id': "wrong_id"
         }
@@ -919,17 +1049,26 @@ class TestExportDataView(ModuleStoreTestCase):
         self.assertEquals(response._headers['location'], ('Location', '/claveunica/info/export?error=error'))
 
     def test_infoexport_get_user_is_staff_guest(self):
+        """
+            Test infoexport get when user have permission
+        """
         response = self.student_client.get(reverse('claveunica-login:infoexport'))
 
         self.assertEquals(response.status_code, 200)
 
     def test_infoexport_get_user_is_anonymous(self):
+        """
+            Test infoexport get when user is anonymous
+        """
         anonymous_client = Client()
         response = anonymous_client.get(reverse('claveunica-login:infoexport'))
 
         self.assertEquals(response.status_code, 404)
 
     def test_infoexport_post_user_is_staff_guest(self):
+        """
+            Test infoexport post when user have permission
+        """
         post_data = {
             'id': str(self.course.id)
         }
